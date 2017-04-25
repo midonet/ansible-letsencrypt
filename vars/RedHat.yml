@@ -14,5 +14,9 @@ letsencrypt_depends:
       - ca-certificates
       - python-pip
       - git
+      - packaging
+      - appdirs
+      - pyparsing
+      
 
 virtualenv_package_name: "python-virtualenv"
