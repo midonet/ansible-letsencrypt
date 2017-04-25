@@ -36,6 +36,9 @@
     become: yes
     with_items:
       - six
+      - packaging
+      - appdirs
+      - pyparsing      
       - setuptools
       - pip
     tags: install
