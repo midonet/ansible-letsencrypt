@@ -3,6 +3,7 @@
     become: yes
     when: ansible_pkg_mgr == "apt"
     tags: install
+    changed_when: False
 
   - include_vars: "{{ item }}"
     with_first_found:
