@@ -41,6 +41,7 @@
       - pyparsing      
       - setuptools
       - pip
+      - cryptography
     tags: install
 
   - name: Install pycparser
