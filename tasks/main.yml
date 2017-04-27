@@ -5,6 +5,11 @@
     tags: install
     changed_when: False
 
+  - set_fact:
+      letsencrypt_command: {{ letsencrypt_venv }}/bin/letsencrypt certonly -n --manual --manual-auth-hook --manual-public-ip-logging-ok --preferred-challenges=dns {{letsencrypt_hook_path}}/{{letsencrypt_hook_file}} --agree-tos  {% if letsencrypt_rsa_key_size is defined %}--rsa-key-size {{ letsencrypt_rsa_key_size }}{% endif %} --text {% for domain in letsencrypt_cert_domains %}-d {{ domain }} {% endfor %}--email {{ letsencrypt_email }} {% if letsencrypt_server is defined %}--server {{ letsencrypt_server }}{% endif %} --expand
+      authenticator: manual
+    when: aws_sync == True
+
   - include_vars: "{{ item }}"
     with_first_found:
       - "../vars/{{ ansible_distribution }}-{{ ansible_distribution_major_version | int }}.yml"
@@ -38,11 +43,11 @@
       - six
       - packaging
       - appdirs
-      - pyparsing      
+      - pyparsing
       - setuptools
       - pip
     tags: install
-    
+
   - name: Install python depends
     pip:
       virtualenv: "{{ letsencrypt_venv }}"
@@ -53,7 +58,7 @@
     become: yes
     with_items:
       - cryptography
-    tags: install    
+    tags: install
 
   - name: Install pycparser
     # https://community.letsencrypt.org/t/certbot-auto-fails-while-setting-up-virtual-environment-complains-about-package-hashes/20529/22
@@ -83,7 +88,15 @@
     become: yes
     args:
       creates: "/etc/letsencrypt/live/{{ letsencrypt_cert_domains[0] }}"
-    when: letsencrypt_authenticator == "webroot"
+    when: letsencrypt_authenticator == "webroot" and aws_sync == False
+    ignore_errors: True
+
+  - name: Attempt to get the certificate using the webroot authenticator
+    command: "{{ letsencrypt_command }} -a webroot --webroot-path {{ letsencrypt_webroot_path }} certonly"
+    become: yes
+    args:
+      creates: "/etc/letsencrypt/live/{{ letsencrypt_cert_domains[0] }}"
+    when: letsencrypt_authenticator == "webroot" and aws_sync == False
     ignore_errors: True
 
   - name: Attempt to get the certificate using the standalone authenticator (in case eg the webserver isn't running yet)
@@ -91,6 +104,15 @@
     become: yes
     args:
       creates: "/etc/letsencrypt/live/{{ letsencrypt_cert_domains[0] }}"
+    when: aws_sync == False
+
+  - name: Attempt to get the certificate using the DNS authenticator
+    command: "{{ letsencrypt_command }}"
+    become: yes
+    args:
+      creates: "/etc/letsencrypt/live/{{ letsencrypt_cert_domains[0] }}"
+    when: aws_sync == True
+    ignore_errors: True
 
   - name: Fix the renewal file
     ini_file:
@@ -106,6 +128,24 @@
       uir: False
       hsts: False
       authenticator: '{{ letsencrypt_authenticator }}'
+    when: aws_sync == False
+
+  - name: Fix the renewal file ( AWS )
+    ini_file:
+      section: renewalparams
+      option: "{{ item.key }}"
+      value: "{{ item.value }}"
+      dest: "/etc/letsencrypt/renewal/{{ letsencrypt_cert_domains[0] }}.conf"
+    become: yes
+    with_dict:
+      os_packages_only: False
+      verb: certonly
+      noninteractive_mode: False
+      uir: False
+      hsts: False
+      authenticator: '{{ letsencrypt_authenticator }}'
+      pref_challs: dns-01
+    when: aws_sync == True
 
   - name: Fix the webroot map in the renewal file
     ini_file:
@@ -115,6 +155,7 @@
       dest: "/etc/letsencrypt/renewal/{{ letsencrypt_cert_domains[0] }}.conf"
     become: yes
     with_items: "{{ letsencrypt_cert_domains }}"
+    when: aws_sync == False
 
   - name: Install renewal cron
     become: yes
@@ -124,3 +165,5 @@
       hour: "{{ letsencrypt_renewal_frequency.hour }}"
       minute: "{{ letsencrypt_renewal_frequency.minute }}"
       job: "{{ letsencrypt_venv }}/bin/letsencrypt renew --quiet {{ letsencrypt_renewal_command_args }}"
+    when: aws_sync == False
+

@@ -1,4 +1,7 @@
 ---
+  aws_sync: false
+  letsencrypt_hook_path: ''
+  letsencrypt_hook_file: ''
   letsencrypt_src_directory: /usr/local/share/letsencrypt
   letsencrypt_venv: "{{ letsencrypt_src_directory }}/env"
   letsencrypt_cert_domains:
